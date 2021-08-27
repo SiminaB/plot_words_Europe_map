@@ -1,0 +1,108 @@
+---
+title: "Maps with R!"
+runtime: shiny
+output: html_document
+---
+
+```{r echo=FALSE}
+library(sf)
+library(raster)
+library(dplyr)
+library(spData)
+library(spDataLarge)
+
+library(tmap)    # for static and interactive maps
+library(leaflet) # for interactive maps
+library(ggplot2) # tidyverse data visualization package
+
+library(dqshiny) # for autocomplete text
+
+library(rnaturalearth) # for world maps
+```
+
+```{r echo=FALSE}
+##read in list of Swadesh words
+words <- read.csv("words_countries_Swadesh.csv")
+##get unique list of words in English
+unique_words_English <- sort(unique(words$English_word))
+```
+
+## Map translation of common words onto European map
+
+```{r echo=FALSE}
+autocomplete_input(id = "word_English", 
+                   label = "Type word (in English)", 
+                   options = unique_words_English)
+```
+
+```{r echo=FALSE}
+# European + adjacent countries
+europe_adj <- c("Albania","Armenia","Azerbaijan",
+                "Austria","Belarus",
+                "Belgium","Bosnia and Herz.",
+                "Bulgaria",
+                "Croatia","Cyprus",
+                "Czech Rep.","Denmark",
+                "Estonia","Finland","France",
+                "Georgia",
+                "Germany","Greece","Hungary",
+                "Iceland",
+                "Ireland","Italy","Kosovo",
+                "Latvia",
+                "Lithuania","Luxembourg","Macedonia",
+                "Malta","Moldova","Montenegro",
+                "Netherlands","Norway","Poland",
+                "Portugal","Romania","Russia",
+                "Serbia","Slovakia",
+                "Slovenia","Spain",
+                "Sweden","Switzerland",
+                "Syria",
+                "Turkey",
+                "Ukraine",
+                "United Kingdom")
+
+world_map <- ne_countries(scale = 50, returnclass = 'sf')
+europe_map <- world_map %>% filter(name %in% europe_adj)
+
+```
+
+```{r echo=FALSE}
+renderPlot({
+  
+  word_chosen <- words %>% 
+    filter(English_word == input$word_English)
+  
+  ##compute spherical centroid of each country
+  ##see https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+  ##(note issue with France)
+  europe_map <- 
+    cbind(europe_map,
+          st_coordinates((st_centroid(europe_map,
+                                      of_largest_polygon = TRUE))))
+  
+  ##change this for France
+  europe_map %>% filter(name=="France")
+  
+  europe_map$X[europe_map$name == "France"] <- 2
+  europe_map$Y[europe_map$name == "France"] <- 47.5
+  
+  ##merge with europe_map data frame
+  europe_map_word_chosen <- merge(word_chosen,
+                                  europe_map,
+                                  by.x="Country",
+                                  by.y="name",
+                                  all=TRUE)
+  
+  p <- ggplot() + 
+    geom_sf(data = europe_map, fill = 'orange') +
+    geom_text(data = europe_map_word_chosen, aes(X,Y,label=Word),
+              size=2) +
+    theme_void() +
+    xlim(-20, 48) +
+    ylim(34, 71)
+  
+  p
+  
+})
+```
+
